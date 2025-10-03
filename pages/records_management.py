@@ -650,22 +650,28 @@ with tab3:
             nutrition_submitted = st.form_submit_button("記録を保存", use_container_width=True)
             
             if nutrition_submitted:
-                if food_name and calories > 0:
-                    record = NutritionRecord(
-                        date=datetime.combine(meal_date, meal_time),
-                        meal_type=meal_type,
-                        foods=[{
-                            "name": str(food_name),
-                            "calories": float(calories),
-                            "protein": float(protein),
-                            "carbs": float(carbs),
-                            "fat": float(fat)
-                        }],
-                        total_calories=float(calories),
-                        notes=nutrition_notes if nutrition_notes else None
-                    )
-                    
+                # 入力バリデーション
+                if not food_name or food_name.strip() == "":
+                    st.error("❌ 食品名を入力してください")
+                elif calories <= 0:
+                    st.error("❌ カロリーは0より大きい値を入力してください")
+                else:
                     try:
+                        record = NutritionRecord(
+                            date=datetime.combine(meal_date, meal_time),
+                            meal_type=meal_type,
+                            foods=[{
+                                "name": str(food_name),
+                                "calories": float(calories),
+                                "protein": float(protein),
+                                "carbs": float(carbs),
+                                "fat": float(fat)
+                            }],
+                            total_calories=float(calories),
+                            notes=nutrition_notes if nutrition_notes else None
+                        )
+
+                        # 保存処理
                         if st.session_state.data_manager.save_nutrition(record):
                             st.success("✅ 栄養記録を保存しました！")
                             # 自動入力値をクリア
@@ -673,10 +679,13 @@ with tab3:
                                 if key in st.session_state:
                                     del st.session_state[key]
                             st.rerun()
+                        else:
+                            st.error("❌ 記録の保存に失敗しました")
+                            st.warning("記録は保存されませんでした")
+
                     except Exception as e:
-                        st.error(f"保存エラー: {str(e)}")
-                else:
-                    st.error("食品名とカロリーを入力してください")
+                        st.error(f"❌ エラーが発生しました: {str(e)}")
+                        st.warning("記録は保存されませんでした")
     
     # 栄養記録の表示
     nutrition_records_tab3 = st.session_state.data_manager.load_nutrition()

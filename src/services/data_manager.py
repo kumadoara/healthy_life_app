@@ -30,32 +30,40 @@ class DataManager:
                 # ファイルが存在しない場合は作成
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(default_content, f, ensure_ascii=False)
-                print(f"Created: {file_path}")
+                print(f"作成されました: {file_path}")
             else:
                 # ファイルが存在する場合は検証
                 try:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         json.load(f)
                 except (json.JSONDecodeError, ValueError) as e:
-                    print(f"Repairing corrupted file: {file_path}")
-                    print(f"Error: {e}")
+                    print(f"読み込み中にエラーが発生しました: {e}")
                     
                     # バックアップを作成
                     backup_path = file_path.with_suffix('.backup')
                     try:
                         file_path.rename(backup_path)
-                        print(f"Backup created: {backup_path}")
+                        print(f"バックアップが作成されました: {backup_path}")
                     except:
                         pass
                     
                     # 新しいファイルを作成
                     with open(file_path, 'w', encoding='utf-8') as f:
                         json.dump(default_content, f, ensure_ascii=False)
-                    print(f"File repaired: {file_path}")
+                    print(f"ファイルが修復されました: {file_path}")
     
     def save_profile(self, profile: UserProfile) -> bool:
         """プロフィールを保存"""
         try:
+            # プロフィールのバリデーション
+            if not profile.name or profile.name.strip() == "":
+                print("名前が空のプロフィールは保存できません")
+                return False
+
+            if profile.age <= 0:
+                print("年齢が無効なプロフィールは保存できません")
+                return False
+
             profile_data = profile.model_dump()
             profile_data['updated_at'] = datetime.now().isoformat()
 
@@ -63,9 +71,20 @@ class DataManager:
                 json.dump(profile_data, f, ensure_ascii=False, indent=2, default=str)
             return True
         except Exception as e:
-            print(f"Error saving profile: {e}")
+            print(f"保存中にエラーが発生しました: {e}")
             return False
-        
+
+    def delete_profile(self) -> bool:
+        """プロフィールを削除"""
+        try:
+            if self.current_user_file.exists():
+                self.current_user_file.unlink()
+                return True
+            return False
+        except Exception as e:
+            print(f"削除中にエラーが発生しました: {e}")
+            return False
+
     def load_profile(self) -> Optional[UserProfile]:
         """プロフィールを読み込み"""
         try:
@@ -74,7 +93,7 @@ class DataManager:
                     data = json.load(f)
                 return UserProfile(**data)
         except Exception as e:
-            print(f"Error loading profile: {e}")
+            print(f"読み込み中にエラーが発生しました: {e}")
         return None
 
     def save_workout(self, record: WorkoutRecord) -> bool:
@@ -98,7 +117,7 @@ class DataManager:
                 json.dump(workouts, f, ensure_ascii=False, indent=2, default=str)
             return True
         except Exception as e:
-            print(f"Error saving workout: {e}")
+            print(f"保存中にエラーが発生しました: {e}")
             return False
     
     def load_workouts(self) -> List[WorkoutRecord]:
@@ -108,7 +127,7 @@ class DataManager:
             workouts_data = self._load_json_safely(workout_file, [])
             return [WorkoutRecord(**record) for record in workouts_data]
         except Exception as e:
-            print(f"Error loading workouts: {e}")
+            print(f"読み込み中にエラーが発生しました: {e}")
             return []
         
     def delete_workout(self, index: int) -> bool:
@@ -124,20 +143,38 @@ class DataManager:
                 # ファイルに保存
                 with open(workout_file, 'w', encoding='utf-8') as f:
                     json.dump(workouts, f, ensure_ascii=False, indent=2, default=str)
-                
-                print(f"Deleted workout: {deleted_record.get('exercise', 'Unknown')} at index {index}")
+
                 return True
             else:
-                print(f"Invalid index: {index}")
+                print("削除エラー: 指定されたインデックスが無効です。")
                 return False
         except Exception as e:
-            print(f"Error deleting workout: {e}")
+            print(f"トレーニング記録を削除中にエラーが発生しました: {e}")
             return False
 
     def save_nutrition(self, record: NutritionRecord) -> bool:
         """栄養記録を保存"""
         nutrition_file = self.data_dir / "nutrition.json"
         try:
+            # レコードのバリデーション
+            if record is None:
+                print("栄養記録がNoneです")
+                return False
+
+            if record.date is None:
+                print("日付が設定されていない栄養記録は保存できません")
+                return False
+
+            if not record.foods or len(record.foods) == 0:
+                print("食品リストが空の栄養記録は保存できません")
+                return False
+
+            # 食品リストの内容をチェック
+            for food in record.foods:
+                if not isinstance(food, (dict, object)) or isinstance(food, (int, float, str)):
+                    print("無効な食品データが含まれています")
+                    return False
+
             # 既存のデータを読み込み
             records = self._load_json_safely(nutrition_file, [])
             
@@ -155,7 +192,7 @@ class DataManager:
                 json.dump(records, f, ensure_ascii=False, indent=2, default=str)
             return True
         except Exception as e:
-            print(f"Error saving nutrition: {e}")
+            print(f"栄養データの保存中にエラーが発生しました: {e}")
             return False
             
     def load_nutrition(self) -> List[NutritionRecord]:
@@ -165,7 +202,7 @@ class DataManager:
             nutrition_data = self._load_json_safely(nutrition_file, [])
             return [NutritionRecord(**record) for record in nutrition_data]
         except Exception as e:
-            print(f"Error loading nutrition: {e}")
+            print(f"栄養データの読み込み中にエラーが発生しました: {e}")
             return []
         
     def delete_nutrition(self, index: int) -> bool:
@@ -181,14 +218,13 @@ class DataManager:
                 # ファイルに保存
                 with open(nutrition_file, 'w', encoding='utf-8') as f:
                     json.dump(records, f, ensure_ascii=False, indent=2, default=str)
-                
-                print(f"Deleted nutrition record: {deleted_record.get('meal_type', 'Unknown')} at index {index}")
+
                 return True
             else:
-                print(f"Invalid index: {index}")
+                print("削除エラー: 指定されたインデックスが無効です。")
                 return False
         except Exception as e:
-            print(f"Error deleting nutrition: {e}")
+            print(f"栄養データの削除中にエラーが発生しました: {e}")
             return False 
     
     def _load_json_safely(self, file_path: Path, default_value):
@@ -208,14 +244,13 @@ class DataManager:
                 return json.loads(content)
                 
         except json.JSONDecodeError as e:
-            print(f"JSON decode error in {file_path}: {e}")
-            print(f"Resetting file to default value")
-            
+            print(f"データの読み込み中にエラーが発生しました: {e}")
+           
             # 破損したファイルをバックアップ
             backup_path = file_path.with_suffix('.corrupt')
             try:
                 file_path.rename(backup_path)
-                print(f"Corrupted file backed up to: {backup_path}")
+                print(f"破損したファイルがバックアップされました: {backup_path}")
             except:
                 pass
             
@@ -225,7 +260,7 @@ class DataManager:
             
             return default_value
         except Exception as e:
-            print(f"Unexpected error loading {file_path}: {e}")
+            print(f"予期せぬエラーが発生しました: {e}")
             return default_value
     
     def clear_all_data(self):
@@ -239,5 +274,5 @@ class DataManager:
             if file_path.exists():
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump([], f)
-                print(f"Cleared: {file_path}")
+                print(f"クリア済み: {file_path}")
                 

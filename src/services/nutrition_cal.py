@@ -3,18 +3,24 @@
 BMI、カロリー、栄養素などの計算を担当
 """
 from typing import Dict, Tuple
-from models.user_profile import UserProfile
+from src.models.user_profile import UserProfile
 
 class HealthCalculator:
     """健康関連の計算を行うクラス"""
 
     # 活動レベル別の活動係数
     ACTIVITY_MULTIPLIERS = {
-        "sedentary": 1.2,   # 運動しない（デスクワーク中心）
-        "light": 1.375,     # 軽い運動（週1-3回）
-        "moderate": 1.55,   # 中程度の運動（週3-5回）
-        "active": 1.725,    # 活発な運動（週6-7回）
-        "very_active": 1.9, # 非常に活発（1日2回の運動、肉体労働） 
+        "座りがち": 1.2,     # 運動しない（デスクワーク中心）
+        "軽い運動": 1.375,    # 軽い運動（週1-3回）
+        "適度な運動": 1.55,   # 中程度の運動（週3-5回）
+        "活発": 1.725,       # 活発な運動（週6-7回）
+        "非常に活発": 1.9,   # 非常に活発（1日2回の運動、肉体労働）
+        # 英語版も互換性のため残す
+        "sedentary": 1.2,
+        "light": 1.375,
+        "moderate": 1.55,
+        "active": 1.725,
+        "very_active": 1.9,
     }
 
     @staticmethod
@@ -99,9 +105,12 @@ class HealthCalculator:
         Returns:
             推奨カロリー（kcal）  
         """        
-        if goal == "lose":
+        lose_goals = ["lose", "減量"]
+        gain_goals = ["gain", "増量", "筋肉増強"]
+
+        if goal in lose_goals:
             return daily_calories - 300  # 減量: -300kcal
-        elif goal == "gain":
+        elif goal in gain_goals:
             return daily_calories + 300  # 増量: +300kcal
         else:
             return daily_calories   # 維持
@@ -118,10 +127,14 @@ class HealthCalculator:
         Returns:
             1日のタンパク質必要量（g)       
         """ 
-        if goal == "gain" or activity_level in ["active", "very_active"]:
+        high_activity_levels = ["active", "very_active", "活発", "非常に活発"]
+        gain_goals = ["gain", "増量", "筋肉増強"]
+        lose_goals = ["lose", "減量"]
+
+        if goal in gain_goals or activity_level in high_activity_levels:
             # 筋肉増量または高活動: 体重1kgあたり2.0-2.2g
             protein_per_kg = 2.0
-        elif goal == "lose":
+        elif goal in lose_goals:
             # 減量: 体重1kgあたり1.6-1.8g
             protein_per_kg = 1.8
         else:

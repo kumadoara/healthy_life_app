@@ -16,6 +16,19 @@ class FoodNutritionService:
     def get_nutrition_info(self, food_name: str, amount: str = "100g") -> Optional[Dict]:
         """食品名から栄養情報を取得"""
         try:
+            # 空の食品名の場合は低信頼度の結果を返す
+            if not food_name or food_name.strip() == "":
+                return {
+                    "food_name": "",
+                    "amount": amount,
+                    "calories": 0,
+                    "protein": 0,
+                    "carbs": 0,
+                    "fat": 0,
+                    "fiber": 0,
+                    "sodium": 0,
+                    "confidence": 0.0
+                }
             prompt = f"""
 以下の食品の栄養情報を日本の一般的な食品成分表に基づいて提供してください。
 食品名: {food_name}
@@ -50,6 +63,10 @@ class FoodNutritionService:
                 temperature=0.1
             )
 
+            if not response.choices:
+                st.error("レスポンスが空です")
+                return None
+
             content = response.choices[0].message.content.strip()
 
             # JSONを抽出・クリーニング
@@ -65,9 +82,16 @@ class FoodNutritionService:
 
             try:
                 nutrition_data = json.loads(json_str)
+
+                # 必須フィールドの検証
+                required_fields = ['food_name', 'calories']
+                if not all(field in nutrition_data for field in required_fields):
+                    st.error("レスポンスに必須フィールドが不足しています")
+                    return None
+
                 return nutrition_data
             except json.JSONDecodeError as e:
-                print(f"JSON parse error: {e}")
+                print(f"JSON解析エラー: {e}")
                 print(f"Raw content: {content}")
                 return None
             
@@ -78,6 +102,11 @@ class FoodNutritionService:
     def analyze_meal_image(self, image_data: bytes) -> Optional[Dict]:
         """食事画像を分析して栄養バランスを評価"""
         try:
+            # 入力検証
+            if image_data is None:
+                st.error("画像が指定されていません")
+                return None
+
             import base64
 
             # 画像をbase64エンコード
@@ -109,7 +138,7 @@ class FoodNutritionService:
 JSON形式以外の文字は含めないでください。
 """
             response = self.client.chat.completions.create(
-                model="gpt-4-vision-preview",
+                model="gpt-4o",  # 最新のビジョンモデルを使用
                 messages=[
                     {
                         "role": "user",
@@ -145,15 +174,17 @@ JSON形式以外の文字は含めないでください。
                 return analysis
             
             except json.JSONDecodeError as e:
-                print(f"JSON parse error: {e}")
+                print(f"JSON解析エラー: {e}")
                 print(f"Raw content: {content}")
                 return None
 
         except Exception as e:
-            # gpt-4-vision-previewが利用できない場合の処理
-            if "gpt-4-vision" in str(e):
+            # ビジョンモデルが利用できない場合の処理
+            if "gpt-4" in str(e) or "vision" in str(e):
                 st.warning("画像分析機能は現在利用できません。GPT-4 Visionの利用権限を確認してください。")
+            elif "a bytes-like object is required" in str(e):
+                st.error("画像が指定されていません")
             else:
-                st.error(f"画像分析エラー: {str(e)}")
+                st.error(f"予期しないエラーが発生しました: {str(e)}")
             return None  
         

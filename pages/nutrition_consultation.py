@@ -47,17 +47,25 @@ with st.sidebar:
     for i, prompt in enumerate(quick_prompts):
         button_key = f"nutrition_quick_{i}"
         if st.button(prompt, use_container_width=True, key=button_key):
-            st.session_state.nutrition_messages.append({"role": "user", "content": prompt})
-
             # AI応答を生成
             try:
                 response = st.session_state.nutrition_chat.get_response(
                     st.session_state.nutrition_chain, prompt
                 )
+
+                # 成功した場合のみメッセージを追加
+                st.session_state.nutrition_messages.append({"role": "user", "content": prompt})
                 st.session_state.nutrition_messages.append({"role": "assistant", "content": response})
                 st.rerun()
+
             except Exception as e:
-                st.error(f"エラー: {str(e)}")
+                error_msg = str(e)
+                if "insufficient_quota" in error_msg or "quota" in error_msg.lower():
+                    st.error("⚠️ APIクォータを超過しました。")
+                    st.info("💡 https://platform.openai.com/account/billing")
+                else:
+                    st.error(f"❌ エラーが発生しました: {error_msg}")
+                # エラー時はメッセージを追加しない
 
 # チャット履歴の表示
 chat_container = st.container()
@@ -73,11 +81,9 @@ if "nutrition_input" not in st.session_state:
 user_input = st.chat_input("栄養に関する質問を入力してください...", key="nutrition_chat_input")
 
 if user_input:
-    # ユーザーメッセージを追加
-    st.session_state.nutrition_messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
-    
+
     # AIレスポンスを生成
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
@@ -88,10 +94,19 @@ if user_input:
                 st.session_state.nutrition_chain, user_input
             )
             message_placeholder.markdown(response)
+
+            # 成功した場合のみメッセージを追加
+            st.session_state.nutrition_messages.append({"role": "user", "content": user_input})
             st.session_state.nutrition_messages.append({"role": "assistant", "content": response})
 
         except Exception as e:
-            st.error(f"エラーが発生しました: {str(e)}")
+            error_msg = str(e)
+            if "insufficient_quota" in error_msg or "quota" in error_msg.lower():
+                message_placeholder.error("⚠️ APIクォータを超過しました。")
+                st.info("💡 https://platform.openai.com/account/billing")
+            else:
+                message_placeholder.error(f"❌ エラーが発生しました: {error_msg}")
+            # エラー時はメッセージを追加しない
 
 # フッター
 with st.sidebar:

@@ -1,0 +1,71 @@
+.PHONY: help install-deps setup test test-% test-file lint coverage coverage-strict report watch ci clean quality-check type-check security
+
+# デフォルト
+help:
+	@echo "ヘルシーライフアプリ - テストMakefile"
+	@echo "make test            # 全テスト"
+	@echo "make test-unit       # 単体テスト"
+	@echo "make test-integration# 統合テスト"
+	@echo "make test-api        # APIテスト"
+	@echo "make test-fast       # 高速テスト"
+	@echo "make lint            # Lint"
+	@echo "make coverage        # カバレッジ"
+	@echo "make report          # HTMLレポート"
+	@echo "make watch           # 監視実行"
+	@echo "make ci              # CI用テスト"
+	@echo "make quality-check   # 品質チェック"
+
+# 依存関係
+install-deps:
+	python -m pip install -r test_requirements.txt
+
+# 環境セットアップ
+setup:
+	python run_tests.py --setup
+
+# 汎用テスト (例: make test-unit)
+test:
+	python run_tests.py --type all
+test-%:
+	python run_tests.py --type $*
+
+# ファイル単位テスト
+test-file:
+	@test -n "$(FILE)" || (echo "❌ FILE指定が必要"; exit 1)
+	python run_tests.py --file $(FILE)
+
+# 静的解析
+lint:
+	python run_tests.py --lint
+
+# カバレッジ
+COV_FAIL_UNDER ?= 80
+coverage:
+	pytest --cov=src --cov-report=html --cov-report=term tests/
+coverage-strict:
+	pytest --cov=src --cov-fail-under=$(COV_FAIL_UNDER) tests/
+
+# レポート
+report:
+	python run_tests.py --report
+
+# 監視実行
+watch:
+	ptw --runner "pytest -v"
+
+# CI
+ci: lint coverage-strict
+	python run_tests.py --quiet
+
+# セキュリティ & 型
+security:
+	bandit -r src/
+type-check:
+	mypy src/
+
+# 品質
+quality-check: lint coverage-strict security type-check
+
+# クリーン
+clean:
+	python run_tests.py --clean

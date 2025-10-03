@@ -22,8 +22,10 @@ class WorkoutFeedbackService:
             return data.isoformat()
         elif hasattr(data, 'isoformat'):  # その他のdatetimeライクなオブジェクト
             return data.isoformat()
+        elif isinstance(data, (int, float, str, bool)) or data is None:
+            return data
         else:
-            return data       
+            raise TypeError("未対応の型が渡されました")       
         
     def analyze_workout(self, workout_data: Dict, user_profile: Dict, recent_workouts: List[Dict] = None) -> Optional[Dict]:
         """単一のワークアウトを分析してフィードバックを提供"""
@@ -32,7 +34,6 @@ class WorkoutFeedbackService:
             clean_workout_data = self._convert_datetime_to_str(workout_data)
             clean_user_profile = self._convert_datetime_to_str(user_profile)
             clean_recent_workouts = self._convert_datetime_to_str(recent_workouts) if recent_workouts else None
-
             recent_context = ""
             if recent_workouts:
                 recent_context = f"\n過去の運動履歴：\n{json.dumps(recent_workouts, ensure_ascii=False, indent=2)}"
@@ -74,39 +75,53 @@ class WorkoutFeedbackService:
 - 個人差を考慮した現実的な提案
 """
             response = self.client.chat.completions.create(
-                model="gpt-4-vision-preview",
+                model="gpt-4o",  # 最新の安定したモデルを使用
                 messages=[
                     {"role": "system", "content": "あなたは経験豊富なパーソナルトレーナーです。安全で効果的なフィードバックを提供してください。"},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3
             )
-
             content = response.choices[0].message.content
             if "```json" in content:
                 json_str = content.split("```json")[1].split("```")[0]
             else:
                 json_str = content
-
             feedback = json.loads(json_str)
+
+            # 必須フィールドの検証（最小限のフィールドのみ）
+            if 'performance_score' not in feedback:
+                return None
+
             return feedback
         
         except Exception as e:
-            st.error(f"ワークアウト分析エラー: {str(e)}")
+            error_msg = str(e)
+            if "insufficient_quota" in error_msg or "quota" in error_msg.lower():
+                st.error("⚠️ APIクォータを超過しました。OpenAI Platformで課金設定を確認してください。")
+                st.info("💡 https://platform.openai.com/account/billing")
+            elif "rate_limit" in error_msg.lower():
+                st.warning("⏱️ APIレート制限に達しました。しばらく待ってから再試行してください。")
+            else:
+                st.error(f"ワークアウト分析エラー: {error_msg}")
             return None
     
     def analyze_weekly_progress(self, weekly_workouts: List[Dict], user_profile: Dict) -> Optional[Dict]:
         """週間の運動進捗を分析"""
         try:
+            # datetimeオブジェクトを文字列に変換
+            clean_workouts = self._convert_datetime_to_str(weekly_workouts)
+            clean_profile = self._convert_datetime_to_str(user_profile)
+
             prompt = f"""
 以下の週間トレーニングデータを分析して、進捗評価と改善提案を提供してください。
 
 ユーザープロフィール：
-- 目標: {user_profile.get('goal', '不明')}
-- 活動レベル: {user_profile.get('activity_level', '不明')}
+- 目標: {clean_profile.get('goal', '不明')}
+- 活動レベル: {clean_profile.get('activity_level', '不明')}
 
 週間ワークアウト履歴：
-{json.dumps(weekly_workouts, ensure_ascii=False, indent=2)}
+{json.dumps(clean_workouts, ensure_ascii=False, indent=2)}
 
 以下のJSON形式で分析結果を返してください：
 {{
@@ -123,24 +138,29 @@ class WorkoutFeedbackService:
 }}
 """
             response = self.client.chat.completions.create(
-                model="gpt-4-vision-preview",
+                model="gpt-4o",  # 最新の安定したモデルを使用
                 messages=[
                     {"role": "system", "content": "あなたは経験豊富なフィットネスコーチです。建設的で励みになるフィードバックを提供してください。"},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.4
             )
-
             content = response.choices[0].message.content
             if "```json" in content:
                 json_str = content.split("```json")[1].split("```")[0]
             else:
-                json_str = content
-            
+                json_str = content            
             analysis = json.loads(json_str)
             return analysis
         
         except Exception as e:
-            st.error(f"週間分析エラー: {str(e)}")
+            error_msg = str(e)
+            if "insufficient_quota" in error_msg or "quota" in error_msg.lower():
+                st.error("⚠️ APIクォータを超過しました。OpenAI Platformで課金設定を確認してください。")
+                st.info("💡 https://platform.openai.com/account/billing")
+            elif "rate_limit" in error_msg.lower():
+                st.warning("⏱️ APIレート制限に達しました。しばらく待ってから再試行してください。")
+            else:
+                st.error(f"週間分析エラー: {error_msg}")
             return None
         

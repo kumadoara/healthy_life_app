@@ -49,9 +49,6 @@ with col1:
         del st.session_state.quick_question_selected
 
     if user_input:
-        # ユーザーメッセージを追加
-        st.session_state.training_messages.append({"role": "user", "content": user_input})
-
         with st.chat_message("user"):
             st.markdown(user_input)
 
@@ -65,10 +62,19 @@ with col1:
                     st.session_state.training_chain, user_input
                 )
                 message_placeholder.markdown(response)
+
+                # 成功した場合のみメッセージを追加
+                st.session_state.training_messages.append({"role": "user", "content": user_input})
                 st.session_state.training_messages.append({"role": "assistant", "content": response})
 
             except Exception as e:
-                st.error(f"エラーが発生しました: {str(e)}")
+                error_msg = str(e)
+                if "insufficient_quota" in error_msg or "quota" in error_msg.lower():
+                    message_placeholder.error("⚠️ APIクォータを超過しました。")
+                    st.info("💡 https://platform.openai.com/account/billing")
+                else:
+                    message_placeholder.error(f"❌ エラーが発生しました: {error_msg}")
+                # エラー時はメッセージを追加しない
     
 with col2:
     st.subheader("🎯  クイックメニュー")
@@ -116,18 +122,25 @@ with col2:
     # クイック質問ボタンの処理を修正
     for i, prompt in enumerate(prompts):
         if st.button(prompt, key=f"training_btn_{i}_{training_category}", use_container_width=True):
-            # セッション状態に質問を保存してページを再読み込み
-            st.session_state.training_messages.append({"role": "user", "content": prompt}) 
-
             # AI応答を生成
             try:
                 response = st.session_state.training_chat.get_response(
                     st.session_state.training_chain, prompt
                 )
-                st.session_state.training_messages.append({"role": "assistant", "content": response}) 
+
+                # 成功した場合のみメッセージを追加
+                st.session_state.training_messages.append({"role": "user", "content": prompt})
+                st.session_state.training_messages.append({"role": "assistant", "content": response})
                 st.rerun()
+
             except Exception as e:
-                st.error(f"エラー: {str(e)}")
+                error_msg = str(e)
+                if "insufficient_quota" in error_msg or "quota" in error_msg.lower():
+                    st.error("⚠️ APIクォータを超過しました。")
+                    st.info("💡 https://platform.openai.com/account/billing")
+                else:
+                    st.error(f"❌ エラー: {error_msg}")
+                # エラー時はメッセージを追加しない
 
     # トレーニング記録の追加
     st.markdown("---")
@@ -145,18 +158,35 @@ with col2:
         notes = st.text_area("メモ")
 
         if st.form_submit_button("記録を追加", use_container_width=True):
-            from src.models.user_profile import WorkoutRecord
-            record = WorkoutRecord(
-                date=datetime.now(),
-                exercise=exercise,
-                duration=duration,
-                calories=calories,
-                intensity=intensity,
-                notes=notes
-            )
-            if st.session_state.data_manager.save_workout(record):
-                st.success("✅  トレーニング記録を追加しました！")
-                st.balloons()
+            # 入力バリデーション
+            if not exercise or exercise.strip() == "":
+                st.error("❌ 運動名を入力してください")
+            elif duration <= 0:
+                st.error("❌ 時間は1分以上で入力してください")
+            elif calories < 0:
+                st.error("❌ 消費カロリーは0以上で入力してください")
+            else:
+                try:
+                    from src.models.user_profile import WorkoutRecord
+                    record = WorkoutRecord(
+                        date=datetime.now(),
+                        exercise=exercise,
+                        duration=duration,
+                        calories=calories,
+                        intensity=intensity,
+                        notes=notes
+                    )
+
+                    # 保存処理
+                    if st.session_state.data_manager.save_workout(record):
+                        st.success("✅  トレーニング記録を追加しました！")
+                        st.balloons()
+                    else:
+                        st.error("❌ 記録の保存に失敗しました")
+
+                except Exception as e:
+                    st.error(f"❌ エラーが発生しました: {str(e)}")
+                    st.warning("記録は保存されませんでした")
 
 # フッター
 with st.sidebar:
